@@ -1,0 +1,64 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Published from the gh-pages branch rather than actions/deploy-pages:
+# artifact deployments on this account sit in "syncing_files", while a branch
+# push goes straight through the Pages branch builder.
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot ${{ env.GODOT_VERSION }} and Web templates
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fsSL -o godot.zip "${BASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+          curl -fsSL -o templates.tpz "${BASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates
+          unzip -q templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          godot --version
+
+      - name: Import project resources
+        run: godot --headless --path . --import
+
+      - name: Level data, physics solvability and save tests
+        run: godot --headless --fixed-fps 60 --path . Scenes/Tests.tscn
+
+      - name: Export Web build
+        run: godot --headless --path . --export-release "Web" web/play/index.html
+
+      - name: Add the arcade shell and account layer
+        run: python3 Tools/patch_web.py
+
+      - name: Publish the Web build to the gh-pages branch
+        run: |
+          set -euo pipefail
+          cd web/play
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publish ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

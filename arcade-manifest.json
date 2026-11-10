@@ -1,0 +1,38 @@
+{
+  "id": "doodle-rescue-3d",
+  "name": "Doodle Rescue 3D",
+  "tagline": "Sketch it. Build it. Save the puppy.",
+  "description": "A 3D physics drawing adventure built in Godot 4 and rendered straight in the browser. Drag a finger across the diorama and the glowing pencil leaves a real 3D beam with real collision: draw a roof to keep bees off Biscuit, a deck for him to cross a ravine, a wall to turn a rolling boulder, or a ramp that drops a toy ball into a basket. The puppy reacts to everything — ears back when the bees get close, a little spin when he is safe — and the results are decided by the simulation that actually ran, not a scripted answer. Four toy worlds hold 20 hand-built levels, each with a stored solution that the shipping physics re-runs before release. A measured pen budget on every level, three stars for an efficient rescue, a journey map, cosmetic pens unlocked with stars, and progress that saves locally and syncs to a Little Joy Arcade account.",
+  "categories": ["Physics", "Puzzle", "Casual", "Arcade"],
+  "runtime": "Godot 4",
+  "version": "0.1.0",
+  "updated": "2026-11-09",
+  "status": "live",
+  "featured": true,
+  "playUrl": "https://jd4rider.github.io/doodle-rescue-3d/",
+  "siteUrl": "https://jd4rider.github.io/doodle-rescue-3d/",
+  "repoUrl": "https://github.com/jd4rider/doodle-rescue-3d",
+  "downloads": [],
+  "cover": { "from": "#8fd7ff", "to": "#2f5d3a", "emoji": "✏️" },
+  "highlights": [
+    "Genuine 3D drawing: every stroke becomes a rounded 3D beam with real collision, not a flat line",
+    "Four play styles — Bee Defence, Bridge Build, Danger Dodge and Contraptions — sharing one pencil",
+    "Biscuit the puppy: oversized eyes, floppy ears, blinking, breathing, nervous trembles and a victory spin",
+    "20 hand-built levels across four toy worlds, each replayed by the shipping physics before release",
+    "Three stars for an efficient rescue: the result card shows exactly how much pen you used",
+    "Bridge decks sag under Biscuit's weight, and the walker meets the same collision the beams use",
+    "Cosmetic pen tin unlocked with stars — a different colour, never different physics",
+    "Stars, trophies and your place in the journey save locally and sync through a Little Joy Arcade account",
+    "Portrait-first with a full-bleed 3D diorama that also adapts to desktop windows",
+    "Reduced-motion and low-quality options for older phones"
+  ],
+  "howToPlay": [
+    "Drag on the scene with a mouse or finger. A glowing pencil line previews the beam.",
+    "Let go to build it: the stroke becomes a real 3D structure with real collision.",
+    "Press Play. Bees attack, Biscuit crosses, boulders roll, or the ball starts moving.",
+    "Keep Biscuit safe for the whole timer, or get him to the flag. Draw again and retry as often as you like.",
+    "Use less pen for more stars. The bar shows the 3★ threshold before you press Play."
+  ],
+  "levels": "20 levels · 4 worlds · 4 play styles",
+  "saveKey": "doodle-rescue-3d-save-v1"
+}
