@@ -66,10 +66,11 @@ body {
 }
 
 #status-progress {
+  position: static !important;
   display: block !important;
   width: min(240px, 64vw) !important;
   height: 9px;
-  margin: 0 !important;
+  margin: 0 auto !important;
   accent-color: #ffb545;
   border-radius: 99px;
   overflow: hidden;
