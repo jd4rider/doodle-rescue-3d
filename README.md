@@ -1,8 +1,8 @@
 # Doodle Rescue 3D
 
 A 3D physics drawing adventure for [Little Joy Arcade](https://littlejoyarcade.site).
-Draw real beams, shelters, bridges and ramps, then watch the physics decide
-whether Biscuit the puppy is safe.
+Draw real beams, plug round doorways, build bridges and ramps, then watch the
+physics decide whether Biscuit the puppy is safe.
 
 Play: <https://jd4rider.github.io/doodle-rescue-3d/>
 
@@ -63,8 +63,9 @@ node Tools/smoke.mjs http://127.0.0.1:4291/
 2. Points are distance-filtered while the finger moves, smoothed for the
    preview, and simplified with Ramer–Douglas–Peucker when the stroke ends.
 3. `BeamBuilder` turns each segment into a rounded 3D capsule and an oriented
-   box collider. The stroke is a real `StaticBody3D` — or an `AnimatableBody3D`
-   for a bridge deck, whose sag moves the collision with it.
+   box collider. The stroke is a real `StaticBody3D` — a `StrokeBody` in Bee
+   Defence, which knows whether it is wedged — or an `AnimatableBody3D` for a
+   bridge deck, whose sag moves the collision with it.
 4. The pen budget is enforced during the drag: the stroke stops at the last
    centimetre rather than silently refusing to build.
 5. The simulation only starts on Play. Undo and Reset are free before then.
@@ -77,10 +78,20 @@ behaviour and real contact with the bee flight lane and the walker.
 
 | Mode | Win | Lose |
 |---|---|---|
-| Bee Defence | Keep Biscuit untouched for the timer | A bee reaches him |
+| Bee Defence | Plug the round doorway and keep Biscuit untouched | A bee gets through |
 | Bridge Build | Biscuit reaches the far lip | He falls, or the timer expires |
 | Danger Dodge | Stay clear until the timer ends | A boulder, crate or ball touches him |
 | Contraption | The ball rests on the pad | It leaves the toybox, or time runs out |
+
+### The round doorway
+
+Biscuit waits in a kennel with one round doorway, and the bees have to come
+through it. Any doodle drawn at the opening fills it with a plug. If both ends
+of the stroke catch the wide wooden frame, the plug is wedged and the bees bonk
+and give up. If the doodle floats, the plug is loose: the swarm leans on it,
+the doodle shakes, and the whole plug is shoved inside. The HUD and the glowing
+door ring call it **OPEN**, **LOOSE** or **WEDGED** before Play. Ends snap to the
+frame, so a single quick stroke is enough if it spans the doorway.
 
 Stars are material efficiency: **3** at or under 66% of the pen, **2** at or
 under 86%, otherwise **1**. The HUD shows the 3★ threshold before Play, and the
@@ -97,15 +108,17 @@ at least one star.
   canvas in a phone viewport, presses Play and waits for the win card, then
   checks the desktop layout. It also asserts the arcade bridge and client exist.
 
-Measured on 2026-11-09: **20/20** stored solutions win in one headless run; a
-real 5.43 m browser drag wins level 1 with three stars and no console errors;
-58 fps in-level on a 390×844 phone viewport and 38–59 fps at 1280×800 after the
-cold shader compile. The same smoke test passed against the deployed Pages URL.
-The full report, including what was not tested, is in `docs/QA_REPORT.md`.
+Measured on 2026-11-09: **20/20** stored solutions win in one headless run,
+plus a loose-plug test that proves the bees shove an unanchored doodle in and
+reach Biscuit. A real 3.21 m browser drag wins level 1 with three stars and no
+console errors. Frame rate in headed Chrome: 55 fps phone bee draw, 60 fps
+phone bridge draw, 49 fps desktop bee draw after warm-up. The same smoke test
+passed against the deployed 0.2.0 Pages URL. The full report, including what
+was not tested, is in `docs/QA_REPORT.md`.
 
 The live arcade entry is in `littlejoyarcade/src/data/games.ts` and migration
-`0019_doodle_rescue_3d.sql`; the Supabase row (`sort_order` 16) and its 18
-achievements were published and verified.
+`0019_doodle_rescue_3d.sql`; the Supabase row (`version` 0.2.0, `sort_order`
+16) and its 18 achievements are published and verified.
 
 ## Assets
 
@@ -128,6 +141,9 @@ licensing questions.
   soft-body deformation.
 - **Bees use collision queries, not rigid bodies.** That is deliberate for
   browser performance; they steer, collide and bonk like physical insects.
+- **A loose plug is shoved with a short scripted slide.** The doodle is a real
+  collider while it holds, but the failure is a hand-authored shake-and-slide,
+  not a free rigid-body simulation of the whole plug.
 - **Blender is not used.** The art is generated in GDScript instead, so there
   are no `.blend` sources to keep in sync.
 - **Hardware coverage.** Tested in Chromium through Playwright at phone and
