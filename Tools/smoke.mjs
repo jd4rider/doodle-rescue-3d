@@ -60,6 +60,9 @@ page.on('console', (message) => {
 
 await page.goto(url, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('#canvas', { timeout: 60000 })
+// Catch the loader before the 37 MiB engine finishes downloading.
+await page.waitForTimeout(900)
+await page.screenshot({ path: '/tmp/doodle-shots/loading.png' })
 await page.waitForTimeout(5000)
 
 const layout = await page.evaluate(() => {

@@ -74,7 +74,16 @@ input on the canvas:
 - Play started the simulation and the level **won with three stars**.
 - Journey map opened; desktop canvas fills 1280×800.
 - **No page errors or console errors.**
-- Screenshots: `/tmp/doodle-shots/{title,draw,stroke,win,worlds,desktop}.png`.
+- Screenshots: `/tmp/doodle-shots/{loading,title,draw,stroke,win,worlds,desktop}.png`.
+
+The final build was deployed to
+<https://jd4rider.github.io/doodle-rescue-3d/> (GitHub Pages, `gh-pages`
+branch). The public URL returned **200** and the whole smoke test was repeated
+against it: a real 5.43 m drag, Play, **won with three stars**, journey map,
+desktop layout, **zero console errors**. The loading overlay was captured while
+the 37.7 MiB wasm downloads and shows the pencil, "Loading Doodle Rescue 3D…"
+and a centred progress bar (the first version hid the progress bar and looked
+blank for several seconds — fixed and redeployed).
 
 Frame rate, measured from the game's own `Engine.get_frames_per_second()` in
 headed Chrome (hardware GPU), median of five one-second samples:
@@ -96,7 +105,23 @@ correctness only, not performance.
 
 ---
 
-## 3. What was not verified
+## 3. Arcade catalogue and database
+
+- `src/data/games.ts` contains the hand-written Doodle Rescue 3D entry, and
+  `supabase/migrations/0019_doodle_rescue_3d.sql` is the reproducible schema
+  seed for a fresh database.
+- The littlejoyarcade CI and Pages workflows completed successfully; the
+  deployed bundle at <https://littlejoyarcade.site/> contains
+  "Doodle Rescue 3D".
+- The live Supabase row was upserted through the service-role REST path:
+  `status = live`, `version = 0.1.0`, `sort_order = 16`, play URL pointing at
+  the Pages build. Verified by reading the row back.
+- **18 achievements** (`doodle-rescue-3d.first_rescue` … `.pens_all`) were
+  inserted and counted back from `public.achievements`.
+
+---
+
+## 4. What was not verified
 
 - **300 levels are not in this build.** 20 hand-built levels are committed and
   all 20 were replayed by the physics. The remaining 280 were not generated,
@@ -117,7 +142,7 @@ correctness only, not performance.
 
 ---
 
-## 4. Reproduce
+## 5. Reproduce
 
 ```bash
 cd doodle-rescue-3d

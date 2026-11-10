@@ -100,8 +100,12 @@ at least one star.
 Measured on 2026-11-09: **20/20** stored solutions win in one headless run; a
 real 5.43 m browser drag wins level 1 with three stars and no console errors;
 58 fps in-level on a 390×844 phone viewport and 38–59 fps at 1280×800 after the
-cold shader compile. The full report, including what was not tested, is in
-`docs/QA_REPORT.md`.
+cold shader compile. The same smoke test passed against the deployed Pages URL.
+The full report, including what was not tested, is in `docs/QA_REPORT.md`.
+
+The live arcade entry is in `littlejoyarcade/src/data/games.ts` and migration
+`0019_doodle_rescue_3d.sql`; the Supabase row (`sort_order` 16) and its 18
+achievements were published and verified.
 
 ## Assets
 
