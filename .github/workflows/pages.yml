@@ -45,7 +45,10 @@ jobs:
         run: godot --headless --fixed-fps 60 --path . Scenes/Tests.tscn
 
       - name: Export Web build
-        run: godot --headless --path . --export-release "Web" web/play/index.html
+        run: |
+          set -euo pipefail
+          mkdir -p web/play
+          godot --headless --path . --export-release "Web" web/play/index.html
 
       - name: Add the arcade shell and account layer
         run: python3 Tools/patch_web.py
