@@ -25,6 +25,8 @@ func _ready() -> void:
 	else:
 		_fail("level data: " + "; ".join(validation["problems"]))
 
+	await _check_loose_plug()
+
 	for level in Levels.levels:
 		if not _only.is_empty() and not _only.has(int(level.get("id", 0))):
 			continue
@@ -53,6 +55,33 @@ func _fail(message: String) -> void:
 	push_error(message)
 
 
+## The promise of the mechanic, tested directly: a doodle that does not catch
+## the rim is pushed out of the doorway by the bees and the level is lost.
+func _check_loose_plug() -> void:
+	if _camera == null:
+		_camera = Camera3D.new()
+		_camera.fov = 50.0
+		add_child(_camera)
+	var runtime := LevelRuntime.new()
+	add_child(runtime)
+	runtime.build(Levels.get_level(1), _camera)
+	runtime.add_stroke(PackedVector2Array([Vector2(0.0, 1.35), Vector2(0.45, 1.5)]))
+	var loose := runtime.loose_stroke_count()
+	runtime.start_simulation()
+	var frames := 0
+	while frames < 900 and runtime.phase == "sim":
+		await get_tree().physics_frame
+		frames += 1
+	var ok := runtime.phase == "lost" and runtime.shoved_count >= 1 and loose >= 1
+	var detail := "PASS — shoved after %d frames" % frames if ok else \
+		"FAIL — phase=%s, loose=%d, shoved=%d, frames=%d" % [runtime.phase, loose, runtime.shoved_count, frames]
+	results.append({"name": "Mechanic: loose doodle", "result": detail})
+	if not ok:
+		_fail("a loose doodle was not shoved out of the doorway")
+	runtime.queue_free()
+	await get_tree().process_frame
+
+
 func _check_level(level: Dictionary) -> void:
 	var name := "L%d %s" % [int(level.get("id", 0)), String(level.get("title", ""))]
 	if _camera == null:
@@ -66,6 +95,8 @@ func _check_level(level: Dictionary) -> void:
 	_last_reason = ""
 	runtime.lost.connect(_on_runtime_lost)
 	runtime.apply_solution()
+	if String(level.get("mode", "")) == "bee" and runtime.loose_stroke_count() > 0:
+		_fail("%s: the stored doorway plug is not wedged" % name)
 	if runtime.used < 0.2:
 		_fail("%s: the stored solution drew nothing" % name)
 		runtime.queue_free()

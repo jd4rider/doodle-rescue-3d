@@ -13,9 +13,10 @@ signal stroke_finished(points: PackedVector2Array, length: float)
 signal stroke_cancelled
 signal budget_exhausted
 
-const MIN_POINT_DISTANCE := 0.11
-const MIN_STROKE := 0.32
+const MIN_POINT_DISTANCE := 0.085
+const MIN_STROKE := 0.22
 const MAX_POINTS := 90
+const SNAP_LIMIT := 0.75
 
 var camera: Camera3D
 var plane_z := 0.0
@@ -24,6 +25,7 @@ var budget := 12.0
 var spent := 0.0
 var enabled := true
 var colour := Color("#ffb545")
+var snap_targets: PackedVector2Array = PackedVector2Array()
 
 var _drawing := false
 var _points: PackedVector2Array = PackedVector2Array()
@@ -115,6 +117,13 @@ func set_colour(value: Color) -> void:
 
 func set_spent(value: float) -> void:
 	spent = value
+
+
+## Doorway rims are magnetic: release a stroke near a rim point and its ends
+## snap onto the wood. This is the difference between a doodle that holds and
+## one that merely floats in the opening.
+func set_snap_targets(points: PackedVector2Array) -> void:
+	snap_targets = points
 
 
 func remaining() -> float:
@@ -239,11 +248,35 @@ func _finish_stroke() -> void:
 	_preview.mesh = null
 	var simplified := _simplify(_points)
 	if simplified.size() >= 2 and _length >= MIN_STROKE:
+		simplified = _snap_ends(simplified)
 		stroke_finished.emit(simplified, _length)
 	else:
 		stroke_cancelled.emit()
 	_points = PackedVector2Array()
 	_length = 0.0
+
+
+func _snap_ends(points: PackedVector2Array) -> PackedVector2Array:
+	if snap_targets.is_empty() or points.size() < 2:
+		return points
+	var first := _nearest_target(points[0])
+	var last := _nearest_target(points[points.size() - 1])
+	if first.x > -900.0:
+		points[0] = first
+	if last.x > -900.0:
+		points[points.size() - 1] = last
+	return points
+
+
+func _nearest_target(point: Vector2) -> Vector2:
+	var best := Vector2(-9999, -9999)
+	var best_distance := SNAP_LIMIT
+	for target in snap_targets:
+		var distance := point.distance_to(target)
+		if distance < best_distance:
+			best_distance = distance
+			best = target
+	return best
 
 
 func cancel() -> void:

@@ -1,5 +1,7 @@
 class_name BeamBuilder
 extends RefCounted
+
+const STROKE_BODY := preload("res://Scripts/Draw/StrokeBody.gd")
 ## Turns a drawn polyline into real 3D geometry with real collision.
 ##
 ## Visuals are overlapping capsules (a rounded toy beam, alternating light and
@@ -20,7 +22,7 @@ static func build_stroke(parent: Node3D, points: PackedVector2Array, colour: Col
 		animatable.sync_to_physics = true
 		body = animatable
 	else:
-		body = StaticBody3D.new()
+		body = STROKE_BODY.new()
 	body.name = "Stroke"
 	body.collision_layer = COLLISION_LAYER
 	body.collision_mask = 0

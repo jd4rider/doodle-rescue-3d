@@ -122,8 +122,14 @@ func validate() -> Dictionary:
 			problems.append("%s solution leaves the drawing area" % name)
 		if mode == "bridge" and not level.has("bridge"):
 			problems.append("%s is a bridge level without bridge data" % name)
-		if mode == "bee" and not level.has("hives"):
-			problems.append("%s is a bee level without hives" % name)
+		if mode == "bee":
+			if not level.has("hives"):
+				problems.append("%s is a bee level without hives" % name)
+			var door: Dictionary = level.get("door", {})
+			if door.is_empty():
+				problems.append("%s is a bee level without a round doorway" % name)
+			elif float(door.get("radius", 0.0)) < 0.6:
+				problems.append("%s has a doorway too small to fill" % name)
 		if mode == "dodge" and (level.get("hazards", []) as Array).is_empty():
 			problems.append("%s is a dodge level without hazards" % name)
 		if mode == "contraption" and not level.has("target"):

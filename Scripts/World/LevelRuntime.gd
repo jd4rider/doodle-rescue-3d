@@ -38,6 +38,13 @@ var target_position := Vector3.ZERO
 var target_radius := 0.9
 var strokes: Array = []
 var reset_count := 0
+var door_center := Vector3.ZERO
+var door_radius := 1.15
+var door_sockets: PackedVector2Array = PackedVector2Array()
+var shoved_count := 0
+var _plug_body: Variant = null
+var _door_ring: MeshInstance3D
+var _door_ring_mat: StandardMaterial3D
 
 var _pending: Array = []
 var _goal := Vector3.ZERO
@@ -123,11 +130,12 @@ func _build_ground_level() -> void:
 	var centre := (x0 + x1) * 0.5
 	var island_root := Decor.island(self, Vector3(centre, 0, 0), width + 1.5, theme)
 	Decor.dressing(island_root, Vector3(0, 0, 0), width + 1.5, theme, int(level.get("id", 1)) * 31)
-	# readable edge props
-	Decor.tree(island_root, Vector3(-width * 0.42, GROUND_TOP, -1.0), 0.7, theme)
-	Decor.tree(island_root, Vector3(width * 0.42, GROUND_TOP, -1.4), 0.55, theme)
-	Decor.mushroom(island_root, Vector3(-width * 0.30, GROUND_TOP, 0.9), Color(_theme_colours["accent"]), 0.8)
-	Decor.rock(island_root, Vector3(width * 0.35, GROUND_TOP, 1.1), 0.55, theme)
+	# readable edge props (bee levels put the kennel here instead)
+	if mode != "bee":
+		Decor.tree(island_root, Vector3(-width * 0.42, GROUND_TOP, -1.0), 0.7, theme)
+		Decor.tree(island_root, Vector3(width * 0.42, GROUND_TOP, -1.4), 0.55, theme)
+		Decor.mushroom(island_root, Vector3(-width * 0.30, GROUND_TOP, 0.9), Color(_theme_colours["accent"]), 0.8)
+		Decor.rock(island_root, Vector3(width * 0.35, GROUND_TOP, 1.1), 0.55, theme)
 
 	var body := StaticBody3D.new()
 	body.name = "Ground"
@@ -150,6 +158,7 @@ func _build_ground_level() -> void:
 
 
 func _build_bee_level() -> void:
+	_build_doghouse()
 	var hive_list: Array = level.get("hives", [])
 	var world_hives: Array = []
 	for value in hive_list:
@@ -163,7 +172,8 @@ func _build_bee_level() -> void:
 	swarm = BeeSwarm.new()
 	swarm.name = "Bees"
 	add_child(swarm)
-	swarm.setup(world_hives, biscuit, int(level.get("bees", 8)))
+	swarm.setup(world_hives, biscuit, int(level.get("bees", 8)),
+		door_center + Vector3(0, 0, 0.2), door_radius)
 	swarm.stung.connect(_on_stung)
 	swarm.bee_reached.connect(func() -> void:
 		if biscuit != null:
@@ -172,6 +182,122 @@ func _build_bee_level() -> void:
 		if has_node("/root/Audio"):
 			get_node("/root/Audio").wood_hit()
 		feedback.emit("bonk", position))
+
+
+## A kennel with one round doorway. Biscuit is visible through the hole and
+## the bees have to come through it — so the doodle the player draws over the
+## opening is the thing the level is actually about.
+func _build_doghouse() -> void:
+	var data: Dictionary = level.get("door", {})
+	var x := float(data.get("x", 0.0))
+	var y := float(data.get("y", 1.35))
+	var radius := float(data.get("radius", 1.15))
+	door_center = Vector3(x, y, 0.0)
+	door_radius = radius
+	door_sockets = PackedVector2Array()
+	# Catch points sit on the wide wooden frame, beyond the physical hole. A
+	# doodle that ends here overlaps the wall, so bees cannot squeeze around it.
+	for i in range(24):
+		var angle := TAU * float(i) / 24.0
+		door_sockets.append(Vector2(x + cos(angle) * (radius + 0.45),
+			y + sin(angle) * (radius + 0.45)))
+
+	if biscuit != null:
+		biscuit.position = Vector3(x, GROUND_TOP, -0.68)
+		biscuit.scale = Vector3.ONE * 0.9
+		biscuit.rotation.y = 0.0
+		biscuit.set_mood("idle")
+
+	var half_w := maxf(2.65, radius + 1.45)
+	var top := y + radius + 0.95
+	var wood := Color(_theme_colours["dirt"]).lightened(0.14)
+	var wood_dark := wood.darkened(0.2)
+	var roof_colour := Color(_theme_colours["grass"]).darkened(0.12)
+
+	var front := Node3D.new()
+	front.name = "KennelFront"
+	add_child(front)
+	var wall := StaticBody3D.new()
+	wall.name = "KennelWall"
+	wall.collision_layer = 1
+	wall.collision_mask = 0
+	front.add_child(wall)
+
+	# Plank grid with a round hole left in it. The collision sits behind the
+	# drawing plane so a doodle can be shoved inward without starting life
+	# intersecting the wall.
+	var tile := 0.7
+	var columns := int(ceil((half_w * 2.0) / tile))
+	var rows := int(ceil((top - GROUND_TOP) / tile))
+	for cx in range(columns):
+		for cy in range(rows):
+			var px := -half_w + tile * 0.5 + float(cx) * tile
+			var py := GROUND_TOP + tile * 0.5 + float(cy) * tile
+			if Vector2(px - x, py - y).length() < radius - 0.02:
+				continue
+			Decor.box(front, Vector3(px, py, -0.28), Vector3(tile + 0.02, tile + 0.02, 0.55),
+				wood if (cx + cy) % 2 == 0 else wood_dark, Vector3.ZERO, 0.72, "Plank")
+			var shape := CollisionShape3D.new()
+			var box := BoxShape3D.new()
+			box.size = Vector3(tile, tile, 0.34)
+			shape.shape = box
+			shape.position = Vector3(px, py, -0.78)
+			wall.add_child(shape)
+
+	# sides, back and roof: one way in, and it is round
+	for side in [-1.0, 1.0]:
+		_panel(Vector3(side * half_w, (GROUND_TOP + top) * 0.5, -0.95),
+			Vector3(0.34, top - GROUND_TOP, 1.9), wood_dark)
+	_panel(Vector3(0, (GROUND_TOP + top) * 0.5, -1.9),
+		Vector3(half_w * 2.0 + 0.3, top - GROUND_TOP, 0.3), wood_dark)
+	# The roof starts behind the flight lane: an overhang in front of the door
+	# would stop the bees before they could ever test the doodle.
+	_panel(Vector3(0, top + 0.08, -1.2),
+		Vector3(half_w * 2.0 + 0.5, 0.3, 1.8), roof_colour)
+
+	# a wide wooden frame around the doorway, plus the glowing "fill me" guide
+	Decor.add_mesh(self, _torus(radius - 0.02, radius + 0.6), Vector3(x, y, 0.34),
+		Decor.mat(wood_dark, 0.55, 0.05, 0.0), Vector3.ONE, Vector3(PI * 0.5, 0, 0), "DoorFrame")
+	var guide := StandardMaterial3D.new()
+	guide.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	guide.albedo_color = Color("#ffcf5c")
+	guide.emission_enabled = true
+	guide.emission = Color("#ffcf5c")
+	guide.emission_energy_multiplier = 1.4
+	_door_ring = Decor.add_mesh(self, _torus(radius + 0.2, radius + 0.27),
+		Vector3(x, y, 0.44), guide, Vector3.ONE, Vector3(PI * 0.5, 0, 0), "DoorGuide")
+	_door_ring_mat = guide
+	_door_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	# a blanket and a bowl inside, visible through the round door
+	Decor.box(self, Vector3(x - radius * 0.45, GROUND_TOP + 0.03, -1.05),
+		Vector3(0.7, 0.06, 0.5), Color("#f2b8c6"), Vector3.ZERO, 0.8, "Blanket")
+	Decor.cylinder(self, Vector3(x + radius * 0.55, GROUND_TOP + 0.06, -1.05), 0.16, 0.09,
+		Color("#7fb2e5"), Vector3.ONE, 0.5, "Bowl")
+	var lamp := OmniLight3D.new()
+	lamp.position = Vector3(x, y + 0.4, -1.25)
+	lamp.light_color = Color("#ffd9a0")
+	lamp.light_energy = 0.8
+	lamp.omni_range = 4.0
+	lamp.shadow_enabled = false
+	add_child(lamp)
+	_update_door_ring()
+
+
+func _panel(centre: Vector3, size: Vector3, colour: Color) -> void:
+	var root := Node3D.new()
+	root.position = centre
+	add_child(root)
+	Decor.box(root, Vector3.ZERO, size, colour, Vector3.ZERO, 0.78, "Panel")
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	body.collision_mask = 0
+	root.add_child(body)
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	body.add_child(shape)
 
 
 func _build_bridge() -> void:
@@ -450,6 +576,8 @@ func _build_warnings() -> void:
 		return
 	for source in sources:
 		var target: Vector3 = biscuit.global_position + Vector3(0, 0.9, 0.4)
+		if mode == "bee":
+			target = door_center + Vector3(0, 0, 0.55)
 		var count := 5
 		for i in range(1, count + 1):
 			var t := float(i) / float(count + 1)
@@ -470,6 +598,8 @@ func _build_warnings() -> void:
 func add_stroke(points: PackedVector2Array) -> Dictionary:
 	if phase != "draw" or points.size() < 2:
 		return {}
+	if mode == "bee":
+		points = _snap_to_door(points)
 	var animated := mode == "bridge"
 	if animated:
 		# A bridge is drawn along its walking surface, so the finished deck sits
@@ -479,8 +609,18 @@ func add_stroke(points: PackedVector2Array) -> Dictionary:
 			lowered.append(point - Vector2(0, BeamBuilder.THICKNESS))
 		points = lowered
 	var stroke := BeamBuilder.build_stroke(self, points, Save.pen_colour(), animated)
+	var body: Variant = stroke["body"]
+	if body != null:
+		if body.has_signal("shoved"):
+			body.shoved.connect(_on_stroke_shoved.bind(body))
+		if mode == "bee" and _plug_body == null and _stroke_near_door(points):
+			_attach_plug(body)
 	strokes.append(stroke)
 	used += float(stroke["length"])
+	if mode == "bee":
+		_evaluate_strokes()
+		if body != null:
+			feedback.emit("secure_doodle" if body.is_secure() else "loose_doodle", Vector3.ZERO)
 	if mode == "bridge" and deck == null:
 		deck = stroke["node"] as Node3D
 		_compute_deck_span(points)
@@ -494,11 +634,15 @@ func remove_last_stroke() -> bool:
 	if strokes.is_empty() or phase != "draw":
 		return false
 	var stroke: Dictionary = strokes.pop_back()
+	if stroke["body"] == _plug_body:
+		_plug_body = null
 	used = maxf(0.0, used - float(stroke["length"]))
 	if stroke["node"] == deck:
 		deck = null
 		deck_span = 0.0
 	(stroke["node"] as Node).queue_free()
+	if mode == "bee":
+		_evaluate_strokes()
 	return true
 
 
@@ -508,9 +652,12 @@ func clear_strokes() -> void:
 		if node != null and is_instance_valid(node):
 			node.queue_free()
 	strokes.clear()
+	_plug_body = null
 	used = 0.0
 	deck = null
 	deck_span = 0.0
+	if mode == "bee":
+		_evaluate_strokes()
 
 
 func _compute_deck_span(points: PackedVector2Array) -> void:
@@ -550,6 +697,7 @@ func start_simulation() -> void:
 		_warning_root.visible = false
 	match mode:
 		"bee":
+			_evaluate_strokes()
 			if swarm != null:
 				swarm.start()
 			_bees_enabled = true
@@ -596,8 +744,12 @@ func _update_idle(delta: float) -> void:
 		return
 	if mode == "dodge" and biscuit != null:
 		biscuit.set_mood("curious")
-	if mode == "bee" and biscuit != null:
-		biscuit.set_mood("idle")
+	if mode == "bee":
+		if biscuit != null:
+			biscuit.set_mood("idle")
+		if _door_ring != null and is_instance_valid(_door_ring):
+			var pulse := 1.0 + sin(Time.get_ticks_msec() * 0.004) * 0.025
+			_door_ring.scale = Vector3(pulse, pulse, pulse)
 
 
 func _physics_process(delta: float) -> void:
@@ -785,7 +937,7 @@ func _on_stung() -> void:
 		return
 	if biscuit != null:
 		biscuit.set_mood("scared")
-	_lose("A bee reached Biscuit. Try a wider shelter.")
+	_lose("A bee got through the round doorway. Fill it with a doodle that catches the rim on both sides.")
 
 
 func _win() -> void:
@@ -847,9 +999,12 @@ func _celebrate_burst() -> void:
 	burst.color_ramp = ramp
 	add_child(burst)
 	burst.position = biscuit.position + Vector3(0, 1.2, 0.5) if biscuit != null else Vector3(0, 2, 0.5)
-	get_tree().create_timer(1.8).timeout.connect(func() -> void:
-		if is_instance_valid(burst):
-			burst.queue_free())
+	var life := Timer.new()
+	life.wait_time = 1.8
+	life.one_shot = true
+	life.timeout.connect(burst.queue_free)
+	burst.add_child(life)
+	life.start()
 
 
 func _play_place_burst(points: PackedVector2Array) -> void:
@@ -876,9 +1031,12 @@ func _play_place_burst(points: PackedVector2Array) -> void:
 	puff.material_override = material
 	add_child(puff)
 	puff.position = Vector3(points[points.size() - 1].x, points[points.size() - 1].y, 0.4)
-	get_tree().create_timer(0.9).timeout.connect(func() -> void:
-		if is_instance_valid(puff):
-			puff.queue_free())
+	var life := Timer.new()
+	life.wait_time = 0.9
+	life.one_shot = true
+	life.timeout.connect(puff.queue_free)
+	puff.add_child(life)
+	life.start()
 
 
 # --------------------------------------------------------------------------
@@ -905,7 +1063,201 @@ func debug_state() -> Dictionary:
 		"duration": duration,
 		"hazards": hazards.size(),
 		"bees": swarm.bees.size() if swarm != null else 0,
+		"door": door_status(),
+		"secure_strokes": secure_stroke_count(),
+		"loose_strokes": loose_stroke_count(),
+		"shoved": shoved_count,
 	}
+
+
+# --------------------------------------------------------------------------
+# doorway structure
+# --------------------------------------------------------------------------
+
+func door_snap_points() -> PackedVector2Array:
+	return door_sockets
+
+
+func secure_stroke_count() -> int:
+	var total := 0
+	for stroke in strokes:
+		var body: Variant = stroke["body"]
+		if body != null and bool(body.is_secure()):
+			total += 1
+	return total
+
+
+func loose_stroke_count() -> int:
+	var total := 0
+	for stroke in strokes:
+		var body: Variant = stroke["body"]
+		if body != null and not bool(body.is_secure()):
+			total += 1
+	return total
+
+
+## "wedged" means a secure doodle crosses the middle of the doorway.
+## "loose" means a doodle is sitting in the doorway but nothing holds it.
+func door_status() -> String:
+	if mode != "bee":
+		return ""
+	if _plug_body != null and is_instance_valid(_plug_body):
+		return "wedged" if bool(_plug_body.is_secure()) else "loose"
+	return "open"
+
+
+## A doodle over the doorway fills the whole round opening with a plug. The
+## structural verdict stays on the stroke: if its ends bite the frame, the plug
+## is wedged; if it is floating, the plug shakes loose and the bees pour in.
+func _attach_plug(body: Variant) -> void:
+	_plug_body = body
+	var colour := Save.pen_colour()
+	var disc := MeshInstance3D.new()
+	disc.name = "DoodlePlug"
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = door_radius + 0.24
+	mesh.bottom_radius = door_radius + 0.24
+	mesh.height = 0.1
+	mesh.radial_segments = 24
+	disc.mesh = mesh
+	disc.position = Vector3(door_center.x, door_center.y, -0.12)
+	disc.rotation.x = PI * 0.5
+	disc.material_override = Decor.mat(colour, 0.62, 0.0, 0.0)
+	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.add_child(disc)
+	var rim := Decor.add_mesh(body, _torus(door_radius + 0.12, door_radius + 0.2),
+		Vector3(door_center.x, door_center.y, -0.06),
+		Decor.mat(colour.darkened(0.22), 0.7, 0.0, 0.0), Vector3.ONE,
+		Vector3(PI * 0.5, 0, 0), "PlugRim")
+	rim.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var shape := CollisionShape3D.new()
+	var cylinder := CylinderShape3D.new()
+	cylinder.radius = door_radius + 0.35
+	cylinder.height = 0.5
+	shape.shape = cylinder
+	shape.position = Vector3(door_center.x, door_center.y, -0.05)
+	shape.rotation.x = PI * 0.5
+	body.add_child(shape)
+
+
+func _snap_to_door(points: PackedVector2Array) -> PackedVector2Array:
+	if door_sockets.is_empty() or points.size() < 2:
+		return points
+	var first := _nearest_socket(points[0])
+	if first.x > -900.0:
+		points[0] = first
+	var last := _nearest_socket(points[points.size() - 1])
+	if last.x > -900.0:
+		points[points.size() - 1] = last
+	return points
+
+
+func _nearest_socket(point: Vector2) -> Vector2:
+	var best := Vector2(-9999, -9999)
+	var best_distance := 0.75
+	for socket in door_sockets:
+		var distance := point.distance_to(socket)
+		if distance < best_distance:
+			best_distance = distance
+			best = socket
+	return best
+
+
+func _evaluate_strokes() -> void:
+	if mode != "bee":
+		return
+	for i in range(strokes.size()):
+		var stroke: Dictionary = strokes[i]
+		var body: Variant = stroke["body"]
+		if body == null:
+			continue
+		var points: PackedVector2Array = stroke["points"]
+		var catches := _rim_catches(points)
+		var joints := 0
+		for j in range(strokes.size()):
+			if i == j:
+				continue
+			var other: PackedVector2Array = strokes[j]["points"]
+			if _strokes_touch(points, other):
+				joints += 1
+		var grounded := _touches_ground(points)
+		body.set_secure(catches >= 2 or (catches >= 1 and (joints >= 1 or grounded)))
+	_update_door_ring()
+
+
+## Counts distinct spots on the wooden rim that the doodle actually bites into.
+## Two catches is a plug. One catch is a flap that the bees can lever out.
+func _rim_catches(points: PackedVector2Array) -> int:
+	var hits := {}
+	for point in _sample_points(points):
+		for socket_index in range(door_sockets.size()):
+			if point.distance_to(door_sockets[socket_index]) < 0.14:
+				hits[socket_index] = true
+	return hits.size()
+
+
+func _strokes_touch(a: PackedVector2Array, b: PackedVector2Array) -> bool:
+	var ends := [a[0], a[a.size() - 1]]
+	for point in ends:
+		for other in b:
+			if (point as Vector2).distance_to(other) < 0.42:
+				return true
+	return false
+
+
+func _touches_ground(points: PackedVector2Array) -> bool:
+	for point in points:
+		if point.y <= GROUND_TOP + 0.16:
+			return true
+	return false
+
+
+func _stroke_covers_door(points: PackedVector2Array) -> bool:
+	for point in _sample_points(points):
+		if Vector2(point.x - door_center.x, point.y - door_center.y).length() < door_radius * 0.5:
+			return true
+	return false
+
+
+func _stroke_near_door(points: PackedVector2Array) -> bool:
+	for point in _sample_points(points, 0.18):
+		if Vector2(point.x - door_center.x, point.y - door_center.y).length() < door_radius + 1.0:
+			return true
+	return false
+
+
+func _sample_points(points: PackedVector2Array, step := 0.12) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for i in range(points.size() - 1):
+		var a := points[i]
+		var b := points[i + 1]
+		var steps := maxi(1, int(ceil(a.distance_to(b) / step)))
+		for s in range(steps):
+			out.append(a.lerp(b, float(s) / float(steps)))
+	out.append(points[points.size() - 1])
+	return out
+
+
+func _update_door_ring() -> void:
+	if _door_ring_mat == null:
+		return
+	var colour := Color("#ffcf5c")
+	match door_status():
+		"wedged":
+			colour = Color("#7ed07a")
+		"loose":
+			colour = Color("#e05d55")
+	_door_ring_mat.albedo_color = colour
+	_door_ring_mat.emission = colour
+
+
+func _on_stroke_shoved(body) -> void:
+	shoved_count += 1
+	if body is Node3D:
+		feedback.emit("shoved", (body as Node3D).global_position)
+	else:
+		feedback.emit("shoved", door_center)
+	_update_door_ring()
 
 
 func set_phase_for_test(value: String) -> void:

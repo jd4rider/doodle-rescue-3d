@@ -21,11 +21,17 @@ var biscuit: Node3D
 var _hives: Array = []
 var _time := 0.0
 var _nearest := 999.0
+var entry := Vector3.ZERO
+var entry_radius := 0.0
+var has_entry := false
 
 
-func setup(hives: Array, target: Node3D, count: int) -> void:
+func setup(hives: Array, target: Node3D, count: int, doorway := Vector3.ZERO, doorway_radius := 0.0) -> void:
 	biscuit = target
 	_hives = hives
+	entry = doorway
+	entry_radius = doorway_radius
+	has_entry = doorway_radius > 0.0
 	for i in range(count):
 		_make_bee(i, count)
 
@@ -149,7 +155,15 @@ func _physics_process(delta: float) -> void:
 			bee["active"] = true
 			bee_reached.emit()
 
-		var to_target := target - body.global_position
+		# Bee levels have one round doorway. Flying at the doorway first makes
+		# the swarm read as a siege: they pile up at the hole the player plugs,
+		# not at whichever wall happens to be between them and Biscuit.
+		var aim := target
+		if has_entry:
+			var flat := Vector2(entry.x - body.global_position.x, entry.y - body.global_position.y)
+			if flat.length() > entry_radius * 0.9:
+				aim = entry + Vector3(0, 0, 0.25)
+		var to_target := aim - body.global_position
 		var desired := to_target.normalized() * float(bee["speed"])
 		# a lazy figure-eight so the swarm reads as alive rather than homing missiles
 		desired += Vector3(sin(_time * 2.2 + phase), cos(_time * 1.7 + phase * 1.3), sin(_time * 1.3 + phase)) * 0.65
@@ -177,9 +191,23 @@ func _physics_process(delta: float) -> void:
 		# The drawing plane is the flight lane. A bee that wanders in depth could
 		# slip around a beam it visibly hit, which would make shelters feel broken.
 		body.global_position.z = clampf(body.global_position.z, -0.2, 0.2)
-		# A bee that hits a drawn shelter bonks, spins away and gives up. That is
-		# what makes a barrier in the path read as protection rather than a detour.
-		if body.is_on_wall() and float(bee["bump"]) <= 0.0:
+		# A bee that hits a genuinely wedged doodle bonks, spins away and gives up.
+		# A loose doodle is different: the swarm leans on it instead of giving up,
+		# and the pressure builds until the doodle is shoved out of the doorway.
+		var hit_secure := false
+		var hit_loose := false
+		for c in range(body.get_slide_collision_count()):
+			var collider: Object = body.get_slide_collision(c).get_collider()
+			if collider != null and collider.has_method("is_secure"):
+				if bool(collider.call("is_secure")):
+					hit_secure = true
+				else:
+					collider.call("shove", delta * 2.8)
+					hit_loose = true
+		if hit_loose:
+			# Hold the bee against the loose doodle so the push reads on screen.
+			body.velocity = body.velocity.lerp(Vector3(0, 0.15, 0), 0.2)
+		if hit_secure and float(bee["bump"]) <= 0.0:
 			bee["bump"] = 999.0
 			bee["done"] = true
 			body.collision_mask = 0

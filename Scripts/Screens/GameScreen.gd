@@ -25,6 +25,7 @@ var _hint_button: Button
 var _title_label: Label
 var _objective_label: Label
 var _draw_hint: PanelContainer
+var _draw_hint_label: Label
 var _hint_overlay: PanelContainer
 var _pause_layer: Control
 var _result_layer: Control
@@ -74,6 +75,10 @@ func _build_world() -> void:
 	add_child(draw_engine)
 	draw_engine.setup(Router.main.world, Router.main.camera, runtime.draw_bounds,
 		draw_budget, Save.pen_colour())
+	if runtime.mode == "bee":
+		draw_engine.set_snap_targets(runtime.door_snap_points())
+		if _draw_hint_label != null:
+			_draw_hint_label.text = "✏  Drag across the round doorway"
 	draw_engine.stroke_started.connect(_on_draw_started)
 	draw_engine.stroke_finished.connect(_on_stroke_finished)
 	draw_engine.budget_exhausted.connect(_on_budget_exhausted)
@@ -156,7 +161,8 @@ func _build_hud() -> void:
 	_draw_hint = Ui.panel(Color("#2f2a24"), 16, Color("#2f2a24"), 14, 8)
 	_draw_hint.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_draw_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_draw_hint.add_child(Ui.label("✏  Drag on the scene to draw", 13, Ui.CREAM))
+	_draw_hint_label = Ui.label("✏  Drag on the scene to draw", 13, Ui.CREAM)
+	_draw_hint.add_child(_draw_hint_label)
 	shell.add_child(_draw_hint)
 
 	_hint_overlay = Ui.panel(Color("#fff3cf"), 14, Color("#f1d99a"), 12, 4)
@@ -233,9 +239,21 @@ func _update_hud() -> void:
 	match phase:
 		"draw":
 			_action.text = "Play  ▶"
-			_state_label.text = "Drag to draw · release to build" if _first_draw else \
-				"Add another stroke, or press Play."
-			_state_label.add_theme_color_override("font_color", Ui.MUTED)
+			if runtime.mode == "bee":
+				var door := runtime.door_status()
+				if door == "wedged":
+					_state_label.text = "Doorway wedged — the doodle will hold."
+					_state_label.add_theme_color_override("font_color", Ui.GREEN_DARK)
+				elif door == "loose":
+					_state_label.text = "Loose doodle — catch the wooden rim on both sides."
+					_state_label.add_theme_color_override("font_color", Ui.RED)
+				else:
+					_state_label.text = "Fill the round doorway — touch the rim on both sides."
+					_state_label.add_theme_color_override("font_color", Ui.MUTED)
+			else:
+				_state_label.text = "Drag to draw · release to build" if _first_draw else \
+					"Add another stroke, or press Play."
+				_state_label.add_theme_color_override("font_color", Ui.MUTED)
 			_time_label.text = "Draw free · simulation starts on Play"
 		"sim":
 			_action.text = "Biscuit is moving…"
@@ -405,6 +423,12 @@ func _on_feedback(kind: String, position: Vector3) -> void:
 			Audio.wood_hit()
 		"empty":
 			Router.toast("Draw a line first — even a small one.")
+		"loose_doodle":
+			Router.toast("Loose doodle — the bees can shove it. Catch the rim on both sides.")
+			Audio.ui_back()
+		"shoved":
+			Audio.thud()
+			Router.toast("The bees shoved that doodle in! Wedge the next one across the rim.")
 
 
 func _spawn_dust(position: Vector3) -> void:
