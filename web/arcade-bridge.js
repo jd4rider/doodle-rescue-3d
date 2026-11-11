@@ -14,6 +14,7 @@
 
   var GAME_ID = 'doodle-rescue-3d'
   var SAVE_KEY = GAME_ID + '-save-v1'
+  var RESTORE_KEY = 'lja:godot-restore:' + GAME_ID
 
   var lastPushed = null
   var restored = null
@@ -30,6 +31,27 @@
     return window.LittleJoyArcade || null
   }
 
+  // The client applies a cloud save and then reloads the page so the game boots
+  // with it. Memory does not survive that reload, so the snapshot also waits in
+  // storage until the game pulls it.
+  function stashRestore(value) {
+    try {
+      window.localStorage.setItem(RESTORE_KEY, value)
+    } catch (error) {
+      /* private mode: the in-memory copy still covers this page load */
+    }
+  }
+
+  function takeRestore() {
+    try {
+      var value = window.localStorage.getItem(RESTORE_KEY)
+      if (value) window.localStorage.removeItem(RESTORE_KEY)
+      return value
+    } catch (error) {
+      return null
+    }
+  }
+
   window.LJA_SNAPSHOT = function () {
     var snapshot = {}
     if (window.__doodleSave) snapshot[SAVE_KEY] = window.__doodleSave
@@ -41,6 +63,7 @@
     if (typeof keys[SAVE_KEY] === 'string' && keys[SAVE_KEY].length > 2) {
       restored = keys[SAVE_KEY]
       window.__doodlePendingCloud = restored
+      stashRestore(restored)
     }
   }
 
@@ -70,7 +93,8 @@
     },
 
     pullSave: function () {
-      var value = restored || window.__doodlePendingCloud || null
+      var stashed = takeRestore()
+      var value = restored || window.__doodlePendingCloud || stashed
       restored = null
       window.__doodlePendingCloud = null
       return value
