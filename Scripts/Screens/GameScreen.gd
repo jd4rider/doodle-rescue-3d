@@ -550,6 +550,8 @@ func _build_result() -> void:
 	column.add_child(_result_retry)
 	column.add_child(Ui.ghost("World map", func() -> void:
 		Router.go("levels", {"world": int(level.get("world", 0))}), 46, 14))
+	# Quiet support link: results card only, under the actions.
+	column.add_child(Ui.ghost("☕ Buy me a coffee", TipJar.open, 34, 11))
 
 
 func _on_won(stars: int, used: float, seconds: float) -> void:
