@@ -1,0 +1,91 @@
+/* Doodle Rescue 3D — full-bleed player frame for Little Joy Arcade. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1c3247;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+}
+
+#canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  outline: none;
+  touch-action: none;
+  background: #8fd7ff;
+}
+
+#status,
+#status-progress,
+#status-notice,
+#godot-logo,
+#godot-logo-fade {
+  display: none !important;
+}
+
+#status {
+  display: flex !important;
+  flex-direction: column;
+  gap: 14px;
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  font: 600 16px/1.5 ui-sans-serif, system-ui, sans-serif;
+  background: linear-gradient(180deg, #8fd7ff, #c9f2d5);
+  color: #263b52;
+  text-align: center;
+  padding: 24px;
+}
+
+#status::before {
+  content: "✏️";
+  font-size: 48px;
+  line-height: 1;
+  filter: drop-shadow(0 8px 14px rgba(38, 59, 82, 0.18));
+}
+
+#status::after {
+  content: "Loading Doodle Rescue 3D…";
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+#status-progress {
+  position: static !important;
+  display: block !important;
+  width: min(240px, 64vw) !important;
+  height: 9px;
+  margin: 0 auto !important;
+  accent-color: #ffb545;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(38, 59, 82, 0.14);
+}
+
+/* Keep the Little Joy account pill above the pen shelf instead of over the
+   undo/reset buttons. The client's styles are inline, hence !important. */
+div[data-lja-client] {
+  bottom: 86px !important;
+}
+
+@media (min-width: 900px) {
+  div[data-lja-client] {
+    bottom: 20px !important;
+    left: 20px !important;
+  }
+}
